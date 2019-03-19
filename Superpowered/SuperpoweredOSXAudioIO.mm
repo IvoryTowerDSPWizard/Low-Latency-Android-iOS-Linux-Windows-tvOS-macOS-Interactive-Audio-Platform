@@ -260,8 +260,8 @@ static bool hasMapping(int *map) {
     AudioComponent component = AudioComponentFindNext(NULL, &desc);
     AudioUnit inau = NULL, outau = NULL;
     
-    [mapInputDeviceName release];
-    [mapOutputDeviceName release];
+    //[mapInputDeviceName release];
+    //[mapOutputDeviceName release];
      mapInputDeviceName = mapOutputDeviceName = nil;
     AudioObjectPropertyAddress deviceNameAddress = { kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMaster };
     AudioObjectPropertyAddress inputChannelsAddress = { kAudioDevicePropertyStreamConfiguration, kAudioDevicePropertyScopeInput, kAudioObjectPropertyElementMaster };
@@ -290,7 +290,7 @@ static bool hasMapping(int *map) {
                         UInt32 size = sizeof(CFStringRef);
                         CFStringRef cstr = NULL;
                         AudioObjectGetPropertyData(device, &deviceNameAddress, 0, NULL, &size, &cstr);
-                        mapOutputDeviceName = (NSString *)cstr;
+                        mapOutputDeviceName = (NSString *)CFBridgingRelease(cstr);
                         if (!AudioObjectGetPropertyDataSize(device, &outputChannelsAddress, 0, NULL, &size)) {
                             AudioBufferList *bufferList = (AudioBufferList *)malloc(size);
                             if (bufferList) {
@@ -329,7 +329,7 @@ static bool hasMapping(int *map) {
                         UInt32 size = sizeof(CFStringRef);
                         CFStringRef cstr = NULL;
                         AudioObjectGetPropertyData(device, &deviceNameAddress, 0, NULL, &size, &cstr);
-                        mapInputDeviceName = (NSString *)cstr;
+                        mapInputDeviceName = (NSString *)CFBridgingRelease(cstr);
                         if (!AudioObjectGetPropertyDataSize(device, &inputChannelsAddress, 0, NULL, &size)) {
                             AudioBufferList *bufferList = (AudioBufferList *)malloc(size);
                             if (bufferList) {
@@ -453,7 +453,7 @@ static bool hasMapping(int *map) {
         name = NULL;
         if (AudioObjectGetPropertyData(devices[n], &deviceName, 0, NULL, &size, &name) || !name) continue;
         
-        cname = [(NSString *)name UTF8String];
+        cname = [(NSString *)CFBridgingRelease(name) UTF8String];
         if (cname) {
             current = (audioDevice *)malloc(sizeof(audioDevice));
             if (current) {
