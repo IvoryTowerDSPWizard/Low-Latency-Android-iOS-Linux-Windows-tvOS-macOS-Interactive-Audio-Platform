@@ -16,6 +16,8 @@
     NSString *mapOutputDeviceName, *mapInputDeviceName;
     int numberOfChannels, samplerate, inputFrames, inputChannels, mapNumInputChannels, mapNumOutputChannels;
     bool shouldRun, hasInput, inputEven, outputEven;
+    
+    NSRecursiveLock *theLock;
 }
 
 @synthesize preferredBufferSizeMs, inputEnabled, outputEnabled;
@@ -28,8 +30,14 @@ static OSStatus audioInputCallback(void *inRefCon, AudioUnitRenderActionFlags *i
         return kAudioUnitErr_InvalidParameter;
     };
 
+    //DATARACE was there - comment line below to bring it back
+    [self->theLock lock];
     self->inputFrames = inNumberFrames;
+    
     self->hasInput = !AudioUnitRender(self->inputUnit, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, self->inputEven ? self->inputBuffers0 : self->inputBuffers1);
+    
+    [self->theLock unlock];
+    //DATARACE was there - comment line above to bring it back
     
     if (self->hasInput && !self->outputEnabled) {
         float **inputBufs = self->inputEven ? self->inputBufs0 : self->inputBufs1;
@@ -38,6 +46,9 @@ static OSStatus audioInputCallback(void *inRefCon, AudioUnitRenderActionFlags *i
     }
     
     self->inputEven = !self->inputEven;
+    
+    
+    
 	return noErr;
 }
 
@@ -45,16 +56,32 @@ static OSStatus audioOutputCallback(void *inRefCon, AudioUnitRenderActionFlags *
     SuperpoweredOSXAudioIO *self = (__bridge SuperpoweredOSXAudioIO *)inRefCon;
 
     div_t d = div(inNumberFrames, 8);
-    if ((d.rem != 0) || (inNumberFrames < 32) || (inNumberFrames > MAXFRAMES) || (ioData->mNumberBuffers != self->numberOfChannels) || (self->inputEnabled && (self->inputFrames != inNumberFrames))) {
+    
+    //DATARACE was there - comment line below to bring it back
+    int inputChannels = 0;
+    int inputFrames = 0;
+    [self->theLock lock];
+        inputChannels = self->hasInput ? self->inputChannels : 0;
+        inputFrames = self->inputFrames;
+    self->outputEven = !self->outputEven;
+    [self->theLock unlock];
+    //DATARACE was there - comment line above to bring it back
+    
+    
+    if ((d.rem != 0) || (inNumberFrames < 32) || (inNumberFrames > MAXFRAMES) || (ioData->mNumberBuffers != self->numberOfChannels) || (self->inputEnabled && (inputFrames != inNumberFrames))) {
         return kAudioUnitErr_InvalidParameter;
     };
+    
 
     float *outputBufs[self->numberOfChannels], **inputBufs = self->outputEven ? self->inputBufs0 : self->inputBufs1;
     for (int n = 0; n < self->numberOfChannels; n++) outputBufs[n] = (float *)ioData->mBuffers[n].mData;
+    
     bool silence = true;
-    int inputChannels = self->hasInput ? self->inputChannels : 0;
-    self->outputEven = !self->outputEven;
-
+    
+    
+  
+    
+    
     if (self->processingCallback) silence = !self->processingCallback(self->processingClientdata, inputBufs, inputChannels, outputBufs, self->numberOfChannels, inNumberFrames, self->samplerate, inTimeStamp->mHostTime);
     else if (self->delegate) silence = ![self->delegate audioProcessingCallback:inputBufs inputChannels:inputChannels outputBuffers:outputBufs outputChannels:self->numberOfChannels numberOfSamples:inNumberFrames samplerate:self->samplerate hostTime:inTimeStamp->mHostTime];
 
@@ -96,6 +123,9 @@ static OSStatus devicesChangedCallback(AudioObjectID inObjectID, UInt32 inNumber
 - (id)initWithDelegate:(id<SuperpoweredOSXAudioIODelegate>)del preferredBufferSizeMs:(unsigned int)bufferSizeMs numberOfChannels:(int)channels enableInput:(bool)enableInput enableOutput:(bool)enableOutput audioDeviceID:(unsigned int)deviceID {
     self = [super init];
     if (self) {
+        
+        theLock = [[NSRecursiveLock alloc] init];;
+        
         if (bufferSizeMs < 1) bufferSizeMs = 10;
         numberOfChannels = channels;
         self->preferredBufferSizeMs = bufferSizeMs;
