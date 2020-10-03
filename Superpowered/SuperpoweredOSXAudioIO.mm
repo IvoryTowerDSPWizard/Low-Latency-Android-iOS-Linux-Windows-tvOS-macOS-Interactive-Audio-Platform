@@ -13,7 +13,7 @@ using std::this_thread::get_id;
 void logThreadIdAndCheckMain(std::string fName){
     LOG << get_id() << " Superpowered macOS IO " << fName;
     if (![NSThread isMainThread])
-        LOG << get_id() << "WARNING! " << fName << " call not from main thread!";
+        LOG << get_id() << " WARNING! " << fName << " call not from main thread!";
 }
 
 
