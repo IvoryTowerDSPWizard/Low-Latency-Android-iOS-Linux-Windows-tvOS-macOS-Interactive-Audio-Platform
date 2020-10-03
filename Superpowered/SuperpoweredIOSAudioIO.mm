@@ -164,13 +164,12 @@ static audioDeviceType NSStringToAudioDeviceType(NSString *str) {
         uint64_t diff = mach_absolute_time() - lastCallbackTime;
         diff *= timebase.numer;
         diff /= timebase.denom;
-        //Это уничтожение и пересоздание аудиосессии ведёт к пердежу и зависанию в начале таба и пропаданию звука в Юнити, не хотим такого
-        /*if (diff > 1000000000) { // But it didn't call the audio processing callback in the past second.
+        if (diff > 1000000000) { // But it didn't call the audio processing callback in the past second.
             audioUnitRunning = false;
             [[AVAudioSession sharedInstance] setActive:NO error:nil];
             [self resetAudio];
             [self start];
-        }*/
+        }
     }
 }
 
