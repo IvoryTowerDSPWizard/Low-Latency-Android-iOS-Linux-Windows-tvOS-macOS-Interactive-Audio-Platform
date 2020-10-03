@@ -3,7 +3,22 @@
 #import <AudioUnit/AudioUnit.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <pthread.h>
+
+#include <string>
+#include <thread>
+#include "../../../Source/log/maeLog.hpp"
+
 #include <mach/mach_time.h>
+
+
+using std::this_thread::get_id;
+
+void logThreadIdAndCheckMain(std::string fName){
+    LOG << get_id() << " Superpowered iOS IO " << fName;
+    if (![NSThread isMainThread])
+        LOG << get_id() << "WARNING! " << fName << " call not from main thread!";
+}
+
 
 // Helpers
 #define SILENCE_DEPRECATION(code)                                   \
@@ -63,6 +78,7 @@ static audioDeviceType NSStringToAudioDeviceType(NSString *str) {
 - (id)initWithDelegate:(NSObject<SuperpoweredIOSAudioIODelegate> *)d preferredBufferSize:(unsigned int)preferredBufferSize preferredSamplerate:(unsigned int)prefsamplerate audioSessionCategory:(NSString *)category channels:(int)channels audioProcessingCallback:(audioProcessingCallback)callback clientdata:(void *)clientdata {
     self = [super init];
     if (self) {
+        logThreadIdAndCheckMain("ctor");
         iOS6 = ([[[UIDevice currentDevice] systemVersion] compare:@"6.0" options:NSNumericSearch] != NSOrderedAscending);
         numChannels = !iOS6 ? 2 : channels;
 #if !__has_feature(objc_arc)
@@ -125,6 +141,7 @@ static audioDeviceType NSStringToAudioDeviceType(NSString *str) {
 
 - (void)dealloc {
     [stopTimer invalidate];
+    logThreadIdAndCheckMain("dtor");
     if (audioUnit != NULL) {
         AudioUnitUninitialize(audioUnit);
         AudioComponentInstanceDispose(audioUnit);
@@ -488,6 +505,7 @@ static OSStatus coreAudioProcessingCallback(void *inRefCon, AudioUnitRenderActio
 
 // Public methods
 - (bool)start {
+    logThreadIdAndCheckMain("start");
     started = true;
     if (audioUnit == NULL) return false;
     if (AudioOutputUnitStart(audioUnit)) return false;
@@ -497,6 +515,7 @@ static OSStatus coreAudioProcessingCallback(void *inRefCon, AudioUnitRenderActio
 }
 
 - (void)stop {
+    logThreadIdAndCheckMain("stop");
     started = false;
     if (audioUnit != NULL) AudioOutputUnitStop(audioUnit);
 }
@@ -514,6 +533,7 @@ static OSStatus coreAudioProcessingCallback(void *inRefCon, AudioUnitRenderActio
 }
 
 - (void)mapChannels {
+    logThreadIdAndCheckMain("mapChannels");
     outputChannelMap.deviceChannels[0] = outputChannelMap.deviceChannels[1] = -1;
     for (int n = 0; n < 8; n++) outputChannelMap.HDMIChannels[n] = -1;
     for (int n = 0; n < 32; n++) outputChannelMap.USBChannels[n] = inputChannelMap.USBChannels[n] = - 1;
@@ -540,6 +560,7 @@ static OSStatus coreAudioProcessingCallback(void *inRefCon, AudioUnitRenderActio
 }
 
 - (void)reconfigureWithAudioSessionCategory:(NSString *)category {
+    logThreadIdAndCheckMain("reconfigureWithAudioSessionCategory");
     if (![NSThread isMainThread]) {
         [self performSelectorOnMainThread:@selector(reconfigureWithAudioSessionCategory:) withObject:category waitUntilDone:NO];
         return;

@@ -2,7 +2,20 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <AudioUnit/AudioUnit.h>
 
+#include <thread>
+#include "../../../Source/log/maeLog.hpp"
+
 #define MAXFRAMES 4096
+
+
+using std::this_thread::get_id;
+
+void logThreadIdAndCheckMain(std::string fName){
+    LOG << get_id() << " Superpowered macOS IO " << fName;
+    if (![NSThread isMainThread])
+        LOG << get_id() << "WARNING! " << fName << " call not from main thread!";
+}
+
 
 @implementation SuperpoweredOSXAudioIO {
     id<SuperpoweredOSXAudioIODelegate>delegate;
@@ -90,11 +103,13 @@ static OSStatus devicesChangedCallback(AudioObjectID inObjectID, UInt32 inNumber
 }
 
 - (id)initWithDelegate:(id<SuperpoweredOSXAudioIODelegate>)del preferredBufferSizeMs:(unsigned int)bufferSizeMs numberOfChannels:(int)channels enableInput:(bool)enableInput enableOutput:(bool)enableOutput {
+    logThreadIdAndCheckMain("ctor");
     return [self initWithDelegate:del preferredBufferSizeMs:bufferSizeMs numberOfChannels:channels enableInput:enableInput enableOutput:enableOutput audioDeviceID:UINT_MAX];
 }
 
 - (id)initWithDelegate:(id<SuperpoweredOSXAudioIODelegate>)del preferredBufferSizeMs:(unsigned int)bufferSizeMs numberOfChannels:(int)channels enableInput:(bool)enableInput enableOutput:(bool)enableOutput audioDeviceID:(unsigned int)deviceID {
     self = [super init];
+    logThreadIdAndCheckMain("ctor");
     if (self) {
         if (bufferSizeMs < 1) bufferSizeMs = 10;
         numberOfChannels = channels;
@@ -155,6 +170,7 @@ static void destroyUnit(AudioComponentInstance *unit) {
 }
 
 - (void)dealloc {
+    logThreadIdAndCheckMain("dtor");
     destroyUnit(&inputUnit);
     destroyUnit(&outputUnit);
     for (int n = 0; n < numberOfChannels; n++) {
@@ -235,6 +251,7 @@ static bool hasMapping(int *map) {
 }
 
 - (void)mapChannels {
+    logThreadIdAndCheckMain("mapChannels");
     if (!delegate) return;
     if (![NSThread isMainThread]) {
         [self performSelectorOnMainThread:@selector(mapChannels) withObject:nil waitUntilDone:NO];
@@ -354,6 +371,7 @@ static bool hasMapping(int *map) {
 
 // public methods
 - (bool)start {
+    logThreadIdAndCheckMain("start");
     if (![NSThread isMainThread]) return false;
     shouldRun = true;
     if (!inputUnit && !outputUnit) return false;
@@ -363,6 +381,7 @@ static bool hasMapping(int *map) {
 }
 
 - (void)stop {
+    logThreadIdAndCheckMain("stop");
     if (![NSThread isMainThread]) [self performSelectorOnMainThread:@selector(stop) withObject:nil waitUntilDone:NO];
     else {
         shouldRun = false;
@@ -388,6 +407,7 @@ static bool hasMapping(int *map) {
 }
 
 - (void)setAudioDevice:(unsigned int)deviceID {
+    logThreadIdAndCheckMain("setAudioDevice");
     if (![NSThread isMainThread]) dispatch_async(dispatch_get_main_queue(), ^{
         if (audioDeviceID == deviceID) return;
         audioDeviceID = deviceID;
